@@ -3,7 +3,7 @@ import Webcam from "react-webcam";
 import { FaceMesh } from "@mediapipe/face_mesh";
 import { Camera } from "@mediapipe/camera_utils";
 
-const FaceModal = ({ selectedGlassesImage }) => {
+const FaceModal = ({ glassesImages = [], handleImageCapture }) => {
   const webcamRef = useRef(null);
   const [faceMesh, setFaceMesh] = useState(null);
   const [glassesTransform, setGlassesTransform] = useState({ x: 0, y: 0, scale: 1, rotation: 0 });
@@ -11,41 +11,43 @@ const FaceModal = ({ selectedGlassesImage }) => {
   const [isFaceDetected, setIsFaceDetected] = useState(false);
   const [initialDistance, setInitialDistance] = useState(null);
 
-  const loadModel = async () => {
-    try {
-      const faceMeshModel = new FaceMesh({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
-      });
-      faceMeshModel.setOptions({
-        maxNumFaces: 1,
-        refineLandmarks: true,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-      });
-      faceMeshModel.onResults(onResults);
-      setFaceMesh(faceMeshModel);
-      setIsLoading(false);
-    } catch (error) {
-      console.error("Error loading face mesh model:", error);
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const loadModel = async () => {
+      try {
+        const faceMeshModel = new FaceMesh({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
+        });
+        faceMeshModel.setOptions({
+          maxNumFaces: 1,
+          refineLandmarks: true,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+        });
+        faceMeshModel.onResults(onResults);
+        setFaceMesh(faceMeshModel);
+        setIsLoading(false);
+      } catch (error) {
+        console.error("Error loading face mesh model:", error);
+        setIsLoading(false);
+      }
+    };
+
     loadModel();
   }, []);
 
   useEffect(() => {
     if (faceMesh && webcamRef.current) {
       const video = webcamRef.current.video;
-      const camera = new Camera(video, {
-        onFrame: async () => {
-          await faceMesh.send({ image: video });
-        },
-        width: 640,
-        height: 480,
-      });
-      camera.start();
+      if (video) {
+        const camera = new Camera(video, {
+          onFrame: async () => {
+            await faceMesh.send({ image: video });
+          },
+          width: 640,
+          height: 480,
+        });
+        camera.start();
+      }
     }
   }, [faceMesh]);
 
@@ -74,15 +76,17 @@ const FaceModal = ({ selectedGlassesImage }) => {
     const glassesWidth = (rightEar.x - leftEar.x) * videoWidth;
 
     const glassesPosition = {
-      x: (1 - (leftEye.x + rightEye.x) / 2) * videoWidth,
+      x: (1 - (leftEye.x + rightEye.x) / 2) * videoWidth, // Adjust for mirrored video
       y: (leftEye.y + rightEye.y) / 2 * videoHeight,
     };
-    const distance = Math.sqrt(Math.pow(rightEye.x - leftEye.x, 2) + Math.pow(rightEye.y - leftEye.y, 2));
+
+    const currentDistance = Math.sqrt(Math.pow(rightEye.x - leftEye.x, 2) + Math.pow(rightEye.y - leftEye.y, 2));
     if (!initialDistance) {
-      setInitialDistance(distance);
+      setInitialDistance(currentDistance);
     }
 
-    const scaleFactor = initialDistance ? initialDistance / distance : 1;
+    // Calculate the scale factor based on the initial distance between the eyes
+    const scaleFactor = glassesWidth / 190; // Assuming the original glasses image width is 190 pixels
 
     const deltaX = rightEye.x - leftEye.x;
     const deltaY = rightEye.y - leftEye.y;
@@ -91,8 +95,55 @@ const FaceModal = ({ selectedGlassesImage }) => {
     setGlassesTransform({
       x: glassesPosition.x,
       y: glassesPosition.y,
-      scale: glassesWidth / 220 * scaleFactor, 
+      scale: scaleFactor,
       rotation: rotation,
+    });
+  };
+
+  const captureImage = async () => {
+    const imageSrc = webcamRef.current.getScreenshot();
+    if (imageSrc) {
+      const capturedImages = await processCapturedImages(imageSrc);
+      handleImageCapture(capturedImages);
+    }
+  };
+
+  const processCapturedImages = async (imageSrc) => {
+    const img = new Image();
+    img.src = imageSrc;
+
+    return new Promise((resolve) => {
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, img.width, img.height);
+
+        const promises = glassesImages.map(glassesImage =>
+          new Promise((resolve) => {
+            const glassesImg = new Image();
+            glassesImg.src = glassesImage;
+            glassesImg.onload = () => {
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(img, 0, 0, img.width, img.height);
+
+              ctx.save();
+              ctx.translate(glassesTransform.x, glassesTransform.y);
+              ctx.rotate((glassesTransform.rotation * Math.PI) / 180);
+              ctx.scale(glassesTransform.scale, glassesTransform.scale);
+              ctx.drawImage(glassesImg, -glassesImg.width / 2, -glassesImg.height / 2, glassesImg.width, glassesImg.height);
+              ctx.restore();
+
+              resolve(canvas.toDataURL());
+            };
+          })
+        );
+
+        Promise.all(promises).then((results) => {
+          resolve(results);
+        });
+      };
     });
   };
 
@@ -129,16 +180,21 @@ const FaceModal = ({ selectedGlassesImage }) => {
           <>
             <Webcam
               ref={webcamRef}
+              audio={false}
               autoPlay
               playsInline
               style={{ width: "640px", height: "480px", borderRadius: "30%" }}
               mirrored={true}
+              screenshotFormat="image/jpeg"
             />
+            <div style={{ marginLeft: '200px' }}>
+              <button style={{ height: '30px', width: "50%", borderRadius: '20px', backgroundColor: 'green' }} onClick={captureImage}>Take Image</button>
+            </div>
           </>
         )}
-        {isFaceDetected && glassesTransform && (
+        {isFaceDetected && glassesTransform && glassesImages.length > 0 && (
           <img
-            src={selectedGlassesImage}
+            src={glassesImages[0]}
             alt="Selected Glasses"
             style={{
               position: "absolute",
