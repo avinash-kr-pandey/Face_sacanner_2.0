@@ -7,15 +7,24 @@ import sum6 from "../assets/images/glass-2.png";
 import sum7 from "../assets/images/glass-1.png";
 import sum8 from "../assets/images/glass-3.png";
 import FaceModal from "../pages/FaceMoal";
-
+import ImageModal from "../pages/ImageModal";
 
 function Googles({ isShowModal, setIsShowModal }) {
   const glassesImages = [sum3, sum4, sum5, sum6, sum7, sum8];
   const [capturedImages, setCapturedImages] = useState([]);
+  const [selectedImage, setSelectedImage] = useState(null);
 
   const handleImageCapture = (images) => {
     setIsShowModal(false);
-    setCapturedImages(images); 
+    setCapturedImages(images);
+  };
+
+  const handleImageClick = (image) => {
+    setSelectedImage(image);
+  };
+
+  const closeModal = () => {
+    setSelectedImage(null);
   };
 
   return (
@@ -44,12 +53,14 @@ function Googles({ isShowModal, setIsShowModal }) {
                   className="boximg"
                   src={image}
                   alt={`Captured ${index}`}
+                  onClick={() => handleImageClick(image)} // Handle click to enlarge image
                   style={{
                     boxShadow: "none",
                     border: "none",
                     width: "100%",
                     height: "auto",
                     borderRadius: "20px",
+                    cursor: "pointer", // Change cursor to pointer to indicate it's clickable
                   }}
                 />
               )}
@@ -60,6 +71,8 @@ function Googles({ isShowModal, setIsShowModal }) {
           </div>
         ))}
       </section>
+
+      {selectedImage && <ImageModal imageSrc={selectedImage} onClose={closeModal} />}
     </>
   );
 }
