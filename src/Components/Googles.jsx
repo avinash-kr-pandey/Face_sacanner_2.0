@@ -6,8 +6,9 @@ import sum5 from "../assets/images/glass-3.png";
 import sum6 from "../assets/images/glass-2.png";
 import sum7 from "../assets/images/glass-1.png";
 import sum8 from "../assets/images/glass-3.png";
-import FaceModal from "../pages/FaceMoal";
+
 import ImageModal from "../pages/ImageModal";
+import FaceModal from "../pages/FaceMoal";
 
 function Googles({ isShowModal, setIsShowModal }) {
   const glassesImages = [sum3, sum4, sum5, sum6, sum7, sum8];
@@ -60,7 +61,7 @@ function Googles({ isShowModal, setIsShowModal }) {
                     width: "100%",
                     height: "auto",
                     borderRadius: "20px",
-                    cursor: "pointer", // Change cursor to pointer to indicate it's clickable
+                    cursor: "pointer",
                   }}
                 />
               )}
